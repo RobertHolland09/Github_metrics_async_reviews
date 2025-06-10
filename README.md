@@ -1,1 +1,1 @@
-# Github_metrics_async_reviews
+This repo is for private async reviews for the retrival of GH actions data for an OKR.
