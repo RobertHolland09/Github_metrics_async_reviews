@@ -1,14 +1,18 @@
 import requests
+import logging
 import os
 import json
 
-token = "Placeholder"
+token = "placeholder"
 headers = {"Authorization": "Bearer {}".format(token)}
 
 # Endpoints used for collecting data for GH Actions.
 github_actions_endpoint_run = "https://api.github.com/repos/{owner}/{repo}/actions/runs"
 
-github_repo_list_endpoint = "https://api.github.com/orgs/{owner}/repos?per_page=999"
+github_actions_details = "https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs?per_page=999" 
+
+github_repo_list_endpoint = "https://api.github.com/orgs/{owner}/repos?per_page=100&page={page}"
+# End of Endpoints 
 
 def call_url_get_json(url, headers):
     response = requests.get(url, headers=headers)
@@ -20,27 +24,40 @@ def get_repo_workflow_id(repo, workflow_name):
         if i["name"] == workflow_name:
             return i["workflow_id"]
         
-def get_repo_list():
-    response = requests.get(github_repo_list_endpoint.format(owner="zepz-engineering"),headers=headers)
-    data = response.json()
-    return data
+def pagination(url):
+        
+    page = 1
+    per_page = 100
+    results = []
 
-repo_list = get_repo_list()
-if repo_list:
-    print(f"Successfully retrieved {len(repo_list)} repositories:")
-    with open("repo_list.txt", "a") as f:
-        f.seek(0)
-        f.truncate()
-    for repo in repo_list:
-        with open("repo_list.txt", "a") as f:
-            f.write(f"- {repo.get('name')}\n")
-        print(f"- {repo.get('name')}")
-    else:
-        print("Either no repo's were found or an error occured")
+    while True:        
+        params = {
+            'page': page,
+            'per_page': per_page
+        }
 
+        full_url = github_repo_list_endpoint.format(owner="zepz-engineering", page=page)
+        response = requests.get(full_url, params=params, headers=headers) # was this the right idea to do for the response that you described?
 
-github_actions_details = "https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs?per_page=999" 
+        if response.status_code == 200:
+            res = response.json()
+            for r in res:
+                repo_name = r.get('name')
+                if repo_name:
+                    results.append(r.get('name')) 
+                
+            if len(res) < per_page:
+                break  # Reached the last page, exit the loop
+                
+            page += 1
+        else:
+            logging.error('Request failed with: ' + str(response.status_code))
+            return None
+    print(results) 
+    return results
+    
 
+# print(repo_array_list)
 
 def calculate_workflow_pass_rate(repo, workflow_name):
     workflow_id = get_repo_workflow_id(repo, workflow_name)
