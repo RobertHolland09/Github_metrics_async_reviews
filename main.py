@@ -117,9 +117,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# security_repo_Depebdabot = calculate_workflow_pass_rate("security", "Dependency review")
-# print("Security Repo Dependabot success rate: "+ str(security_repo_Depebdabot))
-
-# sw_backend_repo_CodeQL = calculate_workflow_pass_rate("sw-backend", "CodeQL")
-# print("sw-backend Repo CodeQL success rate: "+ str(sw_backend_repo_CodeQL))
