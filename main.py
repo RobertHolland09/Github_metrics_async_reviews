@@ -12,6 +12,8 @@ github_actions_endpoint_run = "https://api.github.com/repos/{owner}/{repo}/actio
 github_actions_details = "https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs?per_page=999" 
 
 github_repo_list_endpoint = "https://api.github.com/orgs/{owner}/repos"
+
+github_workflows_endpoint = "https://api.github.com/repos/{owner}/{repo}/actions/workflows"
 # End of Endpoints 
 
 def call_url_get_json(url, headers):
@@ -58,6 +60,13 @@ def pagination(url):
 def get_repo_list(org):
     return pagination(github_repo_list_endpoint.format(owner=org))
 
+def get_repo_workflow_details(owner, repo):
+    workflows_url = github_workflows_endpoint.format(owner=owner, repo=repo)
+    workflows_data = call_url_get_json(workflows_url, headers)
+    if workflows_data and "workflows" in workflows_data:
+        return workflows_data["workflows"]
+    return []
+
 def calculate_workflow_pass_rate(repo, workflow_name):
     workflow_id = get_repo_workflow_id(repo, workflow_name)
     if not workflow_id:
@@ -92,17 +101,37 @@ def main():
     print(f"\nProcessing {len(repo_list)} repositories...")
 
     repo_success_rates = []
+    repo_codeql_status = []
 
     print("\n---CodeQL Results---")
     # calculating CodeQL pass rates
     for repo in repo_list:
-        codeql_pass_rates = calculate_workflow_pass_rate(repo, "CodeQL")
-        if codeql_pass_rates is not None: # only adds if the calculation was successful
-            repo_success_rates.append({"repository_name": repo, "success_rate": codeql_pass_rates})
-            print(f"Repository: {repo}, CodeQL Success Rate: {codeql_pass_rates}%")
-        else:
-            repo_success_rates.append({"repository_name": repo, "success_rate": "No result"})
-            print(f"Repository: {repo}, CodeQL Success Rate: No result")
+        print(f"Checking {repo} for CodeQL workflow from codeql.yaml...")
+        
+        found_codeql_workflow = False
+        workflow_details_list = get_repo_workflow_details("Zepz-Engineering", repo)
+
+        if workflow_details_list:
+            for workflow in workflow_details_list:
+                # Check if the workflow name contains "CodeQL" AND its path ends with "codeql.yaml"
+                if "codeql" in workflow["name"].lower() and workflow["path"].lower().endswith("/codeql.yaml"):
+                    codeql_workflow_id = workflow["id"]
+                    codeql_workflow_name = workflow["name"]
+                    
+                    codeql_pass_rates = calculate_workflow_pass_rate(repo, codeql_workflow_id)
+                    if codeql_pass_rates is not None:
+                        repo_codeql_status.append({"repository_name": repo, "codeql_workflow_name": codeql_workflow_name, "success_rate": codeql_pass_rates, "source_file": workflow["path"]})
+                        print(f"Repository: {repo}, CodeQL Workflow: '{codeql_workflow_name}', Source File: {workflow['path']}, Success Rate: {codeql_pass_rates}%")
+                    else:
+                        repo_codeql_status.append({"repository_name": repo, "codeql_workflow_name": codeql_workflow_name, "success_rate": "Calculation Failed", "source_file": workflow["path"]})
+                        print(f"Repository: {repo}, CodeQL Workflow: '{codeql_workflow_name}', Source File: {workflow['path']}, Success Rate: Calculation Failed")
+                    
+                    found_codeql_workflow = True
+                    break # Found the specific CodeQL workflow, no need to check other workflows in this repo
+        
+        if not found_codeql_workflow:
+            repo_codeql_status.append({"repository_name": repo, "codeql_workflow_name": "Not Found (from codeql.yaml)", "success_rate": "Not Applicable", "source_file": "N/A"})
+            print(f"Repository: {repo}, CodeQL Status: No CodeQL workflow found originating from 'codeql.yaml'.")
     
     print("\n--Dependabot Results--")
     # Calculating Dependabot pass rates
